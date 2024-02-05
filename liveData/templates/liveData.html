@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>liveData</title>
+</head>
+<body>
+    <textarea name="ta" id="results" cols="30" rows="10">
+
+    </textarea><br>
+    Enter the expression: <input type="text" id="exp">
+    <input type="button" id="submit" value="Get Results">
+    <input type="button" id="submit1" value="Get Results 2">
+    <script>
+        const socket = new WebSocket('ws://localhost:8000/chat/');
+        socket.onmessage = (e) => {
+            console.log(e)
+            result = JSON.parse(e.data);
+            console.log(result)
+            document.getElementById("results").value += "Server: " + result.name + "\n";
+        }
+
+        socket.onclose = (e) => {
+            console.log("Socket closed!");
+        }
+
+        document.querySelector('#exp').onkeyup = function (e) {
+            if (e.keyCode === 13) {  // enter, return 
+                document.querySelector('#submit ').click();
+            }
+        };
+
+        document.querySelector("#submit").onclick = (e) => {
+            inputfield = document.querySelector("#exp")
+            exp = inputfield.value
+            socket.send(JSON.stringify(
+                {
+                    type:'chat.message',
+                    message:exp
+                }
+            ))
+            
+            document.querySelector("#results").value += "You: " + exp + "\n";
+            inputfield.value = "";
+        }
+        document.querySelector("#submit1").onclick = (e) => {
+            inputfield = document.querySelector("#exp")
+            exp = inputfield.value
+            socket.send(JSON.stringify(
+                {
+                    name:"John",
+                    message:exp
+                }
+            ))
+            document.querySelector("#results").value += "You: " + exp + "\n";
+            inputfield.value = "";
+        }
+
+    </script>
+</body>
+
+</html>
