@@ -22,7 +22,7 @@ Maintenance Server is a project created to handle the server side of other proje
     ```bash
     
     
-    sudo apt install python3-venv python3-dev default-libmysqlclient-dev build-essential pkg-config python3-pip
+    sudo apt install python3-venv python3-dev default-libmysqlclient-dev build-essential pkg-config python3-pip gcc gdb
     
     
     ```
