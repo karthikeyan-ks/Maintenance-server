@@ -47,4 +47,4 @@ Maintenance Server is a project created to handle the server side of other proje
     ./manage.py runserver
     ```
     
-Read the wiki for instructions on how to setup **NGINX** server with **Daphne** ASGI server, Docker for **redis** , **MySQL**.
+Read the wiki for instructions on how to setup **NGINX** server with **Daphne** ASGI server, Docker for **Redis** , and **MySQL**.
