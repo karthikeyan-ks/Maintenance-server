@@ -14,7 +14,7 @@ Maintenance Server is a project created to handle the server side of other proje
 
 1. **Clone the Repository:**
     ```bash
-    git clone https://github.com/your-username/Maintenance-server.git
+    git clone https://github.com/karthikeyan-ks/Maintenance-server.git
     cd Maintenance-server
     ```
 
