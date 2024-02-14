@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-ifpx)k=cmjr0uq7^1)a)$@sz7f-0#+aukk5v-h4)#1r-1p^8!_
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['bengal-nearby-daily.ngrok-free.app', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['bengal-nearby-daily.ngrok-free.app', 'localhost', '127.0.0.1','192.168.1.254']
 
 
 # Application definition

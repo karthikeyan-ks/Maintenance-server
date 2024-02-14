@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -5,15 +6,62 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>liveData</title>
+    <title>Maintenance</title>
+    <style>
+        body {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+          margin: 0;
+          background-image:url('{% static "images/background.jpg" %}');
+          background-size: cover;
+        }
+  
+        textarea {
+          margin: 10px;
+          border-radius: 5px;
+          padding: 5px;
+          font-size: 16px;
+          width: 400px;
+          height: 200px;
+          background: rgba(
+            255,
+            255,
+            255,
+            0.1
+          ); /* Adjust the last value (0.5) for transparency */
+          backdrop-filter: blur(5px); /* Adjust the blur intensity as needed */
+          border: none;
+        }
+        input {
+          margin: 10px;
+          border-radius: 5px;
+          padding: 5px;
+          font-size: 16px;
+          width: 250px;
+          background: rgba(
+            255,
+            255,
+            255,
+            0.1
+          ); /* Adjust the last value (0.5) for transparency */
+          backdrop-filter: blur(5px); /* Adjust the blur intensity as needed */
+          border: none;
+        }
+        input[type="button"] {
+          cursor: pointer;
+        }
+      </style>
 </head>
 <body>
-    <textarea name="ta" id="results" cols="30" rows="10">
-
-    </textarea><br>
-    Enter the expression: <input type="text" id="exp">
-    <input type="button" id="submit" value="Get Results">
-    <input type="button" id="submit1" value="Get Results 2">
+    <div>
+        <textarea name="ta" id="results" cols="30" rows="10"></textarea><br />
+      </div>
+      Enter the expression: <input type="text" id="exp" />
+      <input type="button" id="submit" value="Get Results" />
+      <input type="button" id="submit1" value="Get Results 2" />
     <script>
         const socket = new WebSocket('wss://bengal-nearby-daily.ngrok-free.app/chat/');
         socket.onmessage = (e) => {
