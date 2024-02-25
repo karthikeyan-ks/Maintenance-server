@@ -25,6 +25,7 @@ class Schedule(models.Model):
     schedule_id = models.IntegerField(primary_key=True)
     schedule_type = models.CharField(max_length=10)
     schedule_value = models.IntegerField(default=7)
+    schedule_current_value = models.IntegerField(default=0)
 
 
 class Status(models.Model):
@@ -41,6 +42,7 @@ class Activity(models.Model):
     activity_component_id = models.ForeignKey(Component, on_delete=models.CASCADE)
     activity_schedule_id = models.ForeignKey(Schedule, on_delete=models.CASCADE)
     activity_status_id = models.ForeignKey(Status, on_delete=models.CASCADE, default=1)
+    activity_creator=models.ForeignKey
 
 
 class ChangeType(models.Model):
