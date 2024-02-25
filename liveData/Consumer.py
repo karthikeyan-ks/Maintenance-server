@@ -4,8 +4,8 @@ import json
 import channels.layers
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
+
 from .models import Activity, Users, Component, Machine, Schedule
-from asgiref.sync import async_to_sync
 
 
 class MyConsumer(AsyncWebsocketConsumer):
@@ -42,6 +42,13 @@ class MyConsumer(AsyncWebsocketConsumer):
             await self.auth(event=string_dict)
         elif 'activity' in string_dict:
             await self.getActivity(event=string_dict)
+        elif 'machine' in string_dict:
+            print("condition working")
+            await self.getMachine(queries="machine")
+        elif 'schedule' in string_dict:
+            await self.getSchedule(queries="schedule")
+        elif 'component' in string_dict:
+            await self.getComponent(queries="component")
         else:
             await self.fetchPage(data_dict=string_dict)
 
@@ -108,6 +115,43 @@ class MyConsumer(AsyncWebsocketConsumer):
     async def sendActivity(self, queries):
         for query in queries:
             await self.send(text_data=json.dumps(query))
+
+    @database_sync_to_async
+    def getMachine(self, queries):
+        print("machines are fetching")
+        queries = Machine.objects.all().order_by("machine_id")
+        for query in queries:
+            body = {
+                "id": query.machine_id,
+                "name": query.machine_name,
+                "type": "machine"
+            }
+            asyncio.run(self.send(text_data=json.dumps(body)))
+
+    @database_sync_to_async
+    def getComponent(self, queries):
+        queries = Component.objects.all().order_by("component_id")
+        for query in queries:
+            body = {
+                "id": query.component_id,
+                "name": query.component_name,
+                "type": "component"
+            }
+            asyncio.run(self.send(text_data=json.dumps(body)))
+
+    @database_sync_to_async
+    def getSchedule(self, queries):
+        queries = Schedule.objects.all().order_by("schedule_id")
+        for query in queries:
+            body = {
+                "id": query.schedule_id,
+                "name": query.schedule_type,
+                "type": "schedule",
+                "value": query.schedule_value,
+                "current": query.schedule_current_value
+            }
+            print(query.schedule_id)
+            asyncio.run(self.send(text_data=json.dumps(body)))
 
     @database_sync_to_async
     def creatActivity(self, data):
