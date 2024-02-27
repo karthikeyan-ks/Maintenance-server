@@ -33,30 +33,6 @@ class Status(models.Model):
     status_name = models.CharField(max_length=30)
 
 
-class Activity(models.Model):
-    activity_id = models.AutoField(primary_key=True)
-    activity_name = models.CharField(max_length=30)
-    activity_issued_date = models.DateField(default=timezone.now)
-    activity_description = models.TextField()
-    activity_machine_id = models.ForeignKey(Machine, on_delete=models.CASCADE)
-    activity_component_id = models.ForeignKey(Component, on_delete=models.CASCADE)
-    activity_schedule_id = models.ForeignKey(Schedule, on_delete=models.CASCADE)
-    activity_status_id = models.ForeignKey(Status, on_delete=models.CASCADE, default=1)
-    activity_creator=models.ForeignKey
-
-
-class ChangeType(models.Model):
-    change_type_id = models.IntegerField(primary_key=True)
-    change_type = models.CharField(max_length=30)
-
-
-class ChangeSeeker(models.Model):
-    ChangeSeeker_id = models.AutoField(primary_key=True)
-    Changed_activity_id = models.IntegerField()
-    change_activity_type_id = models.ForeignKey(ChangeType, on_delete=models.CASCADE, default=1)
-    position_number = models.IntegerField(default=0)
-
-
 class Users(models.Model):
     class YourChoices(models.TextChoices):
         CHOICE_ONE = 'A', 'administrator'
@@ -72,9 +48,33 @@ class Users(models.Model):
     )
 
 
+class Activity(models.Model):
+    activity_id = models.AutoField(primary_key=True)
+    activity_name = models.CharField(max_length=30)
+    activity_issued_date = models.DateField(default=timezone.now)
+    activity_description = models.TextField()
+    activity_machine_id = models.ForeignKey(Machine, on_delete=models.CASCADE)
+    activity_component_id = models.ForeignKey(Component, on_delete=models.CASCADE)
+    activity_schedule_id = models.ForeignKey(Schedule, on_delete=models.CASCADE)
+    activity_status_id = models.ForeignKey(Status, on_delete=models.CASCADE, default=1)
+    activity_creator = models.ForeignKey(Users, on_delete=models.CASCADE, default=1)
+
+
+class ChangeType(models.Model):
+    change_type_id = models.IntegerField(primary_key=True)
+    change_type = models.CharField(max_length=30)
+
+
+class ChangeSeeker(models.Model):
+    ChangeSeeker_id = models.AutoField(primary_key=True)
+    Changed_activity_id = models.IntegerField()
+    change_activity_type_id = models.ForeignKey(ChangeType, on_delete=models.CASCADE, default=1)
+    position_number = models.IntegerField(default=0)
+
+
 class Task(models.Model):
     task_assign_to = models.ForeignKey(Users, on_delete=models.CASCADE)
-    task_activity_id = models.ForeignKey(Activity, on_delete=models.CASCADE)
+    task_activity_id = models.ForeignKey(Activity, on_delete=models.CASCADE, unique=True)
     task_id = models.AutoField(primary_key=True)
 
 
