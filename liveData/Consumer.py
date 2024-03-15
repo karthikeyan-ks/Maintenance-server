@@ -30,7 +30,7 @@ class MyConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def receive(self, text_data):
-        print(text_data)
+        print("receive function", text_data)
         string_dict = json.loads(text_data)
         if 'type' in string_dict:
             # Serialize the data to a JSON-formatted string
@@ -41,7 +41,7 @@ class MyConsumer(AsyncWebsocketConsumer):
             })
         elif 'auth' in string_dict:
             await self.auth(event=string_dict)
-        elif 'activity' in string_dict and 'create' not in string_dict and 'update' not in string_dict:
+        elif 'activity' in string_dict and 'create' not in string_dict and 'update' not in string_dict and 'delete' not in string_dict:
             await self.getActivity(event=string_dict)
         elif 'machine' in string_dict:
             print("condition working")
@@ -51,16 +51,32 @@ class MyConsumer(AsyncWebsocketConsumer):
         elif 'component' in string_dict:
             await self.getComponent(queries="component")
         elif 'create' in string_dict:
-            await self.creatActivity(data=string_dict)
+            await self.createActivity(data=string_dict)
         elif 'users' in string_dict:
             await self.getUsers(query=string_dict)
         elif 'update' in string_dict:
             await self.updateActivity(query=string_dict)
+        elif 'delete' in string_dict:
+            print("delete condition worked ")
+            await self.deleteActivity(query=string_dict)
+        elif 'task' in string_dict:
+            await self.sendTask(query=string_dict)
         else:
             await self.fetchPage(data_dict=string_dict)
 
     async def chat_message(self, event):
         await self.send(text_data=event['message'])
+
+    @database_sync_to_async
+    def deleteActivity(self, query):
+        print("activity is going to delete")
+        activity = Activity.objects.filter(activity_id=query['activity']['activity_id']).first()
+        if activity is not None:
+            print("activity is not none")
+            activity.delete()
+        else:
+            print("couldn't find activity")
+        asyncio.run(self.send(text_data=json.dumps({"callback": "delete", "model": "Activity"})))
 
     async def auth(self, event):
         result = await self.checkAuth(event=event)  # Use self.checkAuth instead of checkAuth
@@ -71,7 +87,7 @@ class MyConsumer(AsyncWebsocketConsumer):
             )
             print("group created admin")
         elif result["usermode"] == "B":
-            self.channel_name.group_add(
+            self.channel_layer.group_add(
                 "user",
                 self.channel_name
             )
@@ -91,6 +107,7 @@ class MyConsumer(AsyncWebsocketConsumer):
             user = Users.objects.get(user_name=username, user_password=password)
             mode = user.user_mode
             result = {
+                'user_id': user.user_id,
                 'username': user.user_name,
                 'password': user.user_password,
                 'usermode': user.user_mode
@@ -120,9 +137,10 @@ class MyConsumer(AsyncWebsocketConsumer):
                     "activity_name": query.activity_name,
                     "activity_issued_date": query.activity_issued_date.strftime("%Y-%m-%d"),
                     "assigned_to": task.task_assign_to.user_id,
-                    "assigned_to_user": task.task_assign_to.user_name,
+                    "assigned_to_user": task.task_assign_to.user_name if task is not None else "None",
                     "activity_creator": Users.objects.filter(user_id=query.activity_creator.user_id).first().user_name,
-                    "change": "create"
+                    "change": "create",
+                    "ui_change": "create"
                 }
                 activities.append(body)
             else:
@@ -138,7 +156,8 @@ class MyConsumer(AsyncWebsocketConsumer):
                     "assigned_to": 0,
                     "activity_creator": Users.objects.filter(user_id=query.activity_creator.user_id).first().user_name,
                     "assigned_to_user": "None",
-                    "change": "create"
+                    "change": "create",
+                    "ui_change": "create"
                 }
                 activities.append(body)
         return activities
@@ -185,10 +204,10 @@ class MyConsumer(AsyncWebsocketConsumer):
             asyncio.run(self.send(text_data=json.dumps(body)))
 
     @database_sync_to_async
-    def creatActivity(self, data):
+    def createActivity(self, data):
         print(data)
         str = "failed"
-        new_instance = Activity(
+        instance = Activity(
             activity_issued_date=datetime.now().date(),
             activity_name=data['activity']['activity_name'],
             activity_description=data['activity']['activity_description'],
@@ -205,12 +224,28 @@ class MyConsumer(AsyncWebsocketConsumer):
                                                         user_password=data['password']
                                                         ).first()
         )
-        new_instance.save()
+        instance.save()
+        body = {
+            "activity_id": instance.activity_id,
+            "activity_descrption": instance.activity_description,
+            "actvity_status_id": instance.activity_status_id.status_id,
+            "activity_component_id": instance.activity_component_id.component_id,
+            "activity_machine_id": instance.activity_machine_id.machine_id,
+            "activity_schedule_id": instance.activity_schedule_id.schedule_id,
+            "activity_name": instance.activity_name,
+            "activity_issued_date": instance.activity_issued_date.strftime("%Y-%m-%d"),
+            "activity_creator": instance.activity_creator.user_name,
+            "assigned_to": 0,
+            "assigned_to_user": "None",
+            "change": "create",
+            "ui_change": "create"
+        }
         mess = {
             "callback": "activity created",
             "modal": "Activity"
         }
         asyncio.run(self.send(text_data=json.dumps(mess)))
+        asyncio.run(self.send(text_data=json.dumps(body)))
 
     @database_sync_to_async
     def getUsers(self, query):
@@ -231,7 +266,6 @@ class MyConsumer(AsyncWebsocketConsumer):
     def create(self, query):
         querySet = {}
         type_str = ""
-
         if query == "component":
             body = Component.objects.all().order_by('component_id')
             type_str = "component"
@@ -264,26 +298,8 @@ class MyConsumer(AsyncWebsocketConsumer):
 
     pass
 
-    def send_data_on_database_change(self, instance):
-        task = Task.objects.filter(
-            task_activity_id=Activity.objects.filter(activity_id=instance.activity_id).first()
-        )
-        body = {
-            "activity_id": instance.activity_id,
-            "activity_descrption": instance.activity_description,
-            "actvity_status_id": instance.activity_status_id.status_id,
-            "activity_component_id": instance.activity_component_id.component_id,
-            "activity_machine_id": instance.activity_machine_id.machine_id,
-            "activity_schedule_id": instance.activity_schedule_id.schedule_id,
-            "activity_name": instance.activity_name,
-            "activity_issued_date": instance.activity_issued_date.strftime("%Y-%m-%d"),
-            "assigned_user": task.task_assign_to.user_id
-        }
-        channels_layer = channels.layers.get_channel_layer()
-        asyncio.run(self.send_data_to_client(channels_layer, body))
-        pass
-
     async def send_database_client(self, body):
+        print(json.dumps(body["message"]))
         await self.send(text_data=json.dumps(body))
         pass
 
@@ -291,32 +307,68 @@ class MyConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def updateActivity(self, query):
+        print("update activity called")
         try:
             activity = Activity.objects.filter(
                 activity_id=query['activity']['activity_id']
             ).first()
-            if activity is not None:  # Check if activity is not None
-                print(activity)
-                if activity.activity_status_id != Status.objects.filter(status_id=2).first():
-                    activity.activity_status_id = Status.objects.filter(status_id=2).first()
-                    activity.save()
-                    task = Task(
-                        task_assign_to=Users.objects.filter(user_id=query['activity']['activity_assigned_to']).first(),
-                        task_activity_id=Activity.objects.filter(activity_id=query['activity']['activity_id']).first()
-                    )
-                    task.save()
-                    print("task created")
+            activity.activity_name = query['activity']['activity_name']
+            activity.activity_description = query['activity']['activity_description']
+            activity.activity_component_id = Component.objects.filter(
+                component_id=query['activity']['activity_component_id']).first()
+            activity.activity_machine_id = Machine.objects.filter(
+                machine_id=query['activity']['activity_machine_id']).first()
+            activity.activity_schedule_id = Schedule.objects.filter(
+                schedule_id=query['activity']['activity_schedule_id']).first()
+            task = Task.objects.filter(
+                task_activity_id=query['activity']['activity_id']
+            ).first()
+            if query['activity']['assigned_to_user'] == "None":
+                if activity is not None:
+                    if task is not None:
+                        print("task is not none and activity is not none")
+                        activity.activity_status_id = Status.objects.filter(status_id=1).first()
+                        activity.save()
+                    else:
+                        print("task not assigned for this activity")
                 else:
-                    task = Task.objects.filter(
-                        task_activity_id=activity.activity_id
-                    ).first()
-                    task.task_assign_to = Users.objects.filter(
-                        user_id=query['activity']['activity_assigned_to']).first()
-                    task.save()
-                    print("task changed ")
+                    print("creating Activity because no activity found")
+                    self.createActivity(data=query)
+                    pass
             else:
-                print("No activity found with activity_id:", query['activity']['activity_id'])
+                activity.activity_status_id = Status.objects.filter(
+                    status_id=2
+                ).first()
+                task = Task(
+                    task_assign_to=Users.objects.filter(user_id=query['activity']['activity_assigned_to']).first(),
+                    task_activity_id=activity
+                )
+
+                activity.save()
+                task.save()
+                asyncio.run(self.send(text_data=json.dumps({'callback': 'created', 'model': 'task'})))
         except Exception as e:
-            print("Exception occurred at line", traceback.format_exc().splitlines()[-1])
-            print("Exception details:", e)
-        asyncio.run(self.send(text_data=json.dumps({'callback': 'created', 'model': 'Task'})))
+            print("Exception occurred at line", traceback.format_exc())
+
+    async def send_database_change_delete(self, body):
+        await self.send(text_data=json.dumps(body))
+
+    @database_sync_to_async
+    def sendTask(self, query):
+        print("send task function working...")
+        task = Task.objects.filter(
+            task_assign_to=Users.objects.filter(
+                user_id=query['user_id']
+            ).first()).order_by("task_id")
+        for row in task:
+            body = {
+                "task_id": row.task_id,
+                "activity_id": row.task_activity_id.activity_id,
+                "activity_assigned_by": row.task_activity_id.activity_creator.user_name,
+                "activity_name": row.task_activity_id.activity_name,
+                "activity_description": row.task_activity_id.activity_description,
+                "activity_issued": row.task_activity_id.activity_issued_date.isoformat()
+            }
+            print(body)
+            asyncio.run(self.send(text_data=json.dumps(body)))
+        pass
