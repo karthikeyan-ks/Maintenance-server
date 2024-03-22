@@ -30,8 +30,9 @@ class MyConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def receive(self, text_data):
-        print("receive function", text_data)
+        # print("receive function", text_data)
         string_dict = json.loads(text_data)
+
         if 'type' in string_dict:
             # Serialize the data to a JSON-formatted string
             json_string = json.dumps(text_data)
@@ -61,6 +62,10 @@ class MyConsumer(AsyncWebsocketConsumer):
             await self.deleteActivity(query=string_dict)
         elif 'task' in string_dict:
             await self.sendTask(query=string_dict)
+        elif 'report' in string_dict:
+            if string_dict['report']['type'] is 'image':
+                print(len(str(string_dict['report']['content']).encode('utf-8')))
+
         else:
             await self.fetchPage(data_dict=string_dict)
 
