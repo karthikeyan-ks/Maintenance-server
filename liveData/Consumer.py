@@ -1,33 +1,66 @@
 import asyncio
+import base64
 import json
+import os
 
 import channels.layers
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from datetime import datetime
 import traceback
-from .models import Activity, Users, Component, Machine, Schedule, Task, Status
+from django.conf import settings
+from .models import Activity, Users, Component, Machine, Schedule, Task, Status, Report
 
 
 class MyConsumer(AsyncWebsocketConsumer):
+
     def __init__(self, *args, **kwargs):
         super().__init__(args, kwargs)
         self.group_name = None
+        self.length = 0
+        self.image = []
+        self.audio = []
+        self.text = []
+        self.userid = int()
 
     async def connect(self):
         print("channel name", self.channel_name)
-        # self.scope['url_route']['kwargs']['room_name']
-        print(self.scope['url_route']['kwargs'])
-        room_name = "users"
-
-        # Construct a group name based on the room name
+        print(self.scope['url_route']['kwargs']['userid'])
+        room_name = self.scope['url_route']['kwargs']['userid']
         self.group_name = f"chat_{room_name}"
+        if room_name != "userid":
+            user = await self.getUser(int(room_name))
+            self.userid = int(room_name)
+            print(user)
+            if user.user_mode == 'A':
+                await self.channel_layer.group_add(
+                    "admin",
+                    self.channel_name
+                )
+            elif user.user_mode == 'B':
+                await self.channel_layer.group_add(
+                    "inspectors",
+                    self.channel_name
+                )
+        await self.channel_layer.group_add(
+            "broadcast",
+            self.channel_name
+        )
+        self.userid = room_name
         print(self.group_name)
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        await self.channel_layer.group_discard(
+            "broadcast",
+            self.channel_name
+        )
+        await self.channel_layer.group_discard(
+            "admin",
+            self.channel_name
+        )
 
     async def receive(self, text_data):
         # print("receive function", text_data)
@@ -63,11 +96,70 @@ class MyConsumer(AsyncWebsocketConsumer):
         elif 'task' in string_dict:
             await self.sendTask(query=string_dict)
         elif 'report' in string_dict:
-            if string_dict['report']['type'] is 'image':
-                print(len(str(string_dict['report']['content']).encode('utf-8')))
-
+            data = base64.b64decode(string_dict['report']['content'])
+            name = str(string_dict['report_id']) + str(string_dict['report']['id'])
+            if string_dict['report']['id'] == 0 and string_dict['report']['uploaded'] < 1024:
+                print("reinitializing... ")
+                self.image = []
+                self.audio = []
+                self.text = []
+            if string_dict['report']['type'] == 'image':
+                file_path = self.handleImage(data=data, name=name)
+                if file_path not in self.image:
+                    self.image.append(file_path)
+            elif string_dict['report']['type'] == 'audio':
+                file_path = self.handleAudio(data=data, name=name)
+                if file_path not in self.audio:
+                    self.audio.append(file_path)
+                pass
+            elif string_dict['report']['type'] == 'text':
+                self.text.append(data.decode('utf-8'))
+                print("text type data received", data.decode('utf-8'))
+                pass
+            print(string_dict['report']['size'], string_dict['report']['uploaded'], string_dict['user_id'],
+                  string_dict['report']['id'], string_dict['task_id'], len(data))
+            if string_dict['report']['size'] == string_dict['report']['uploaded'] + len(data):
+                print("finish receiving file...")
+                print(dict(string_dict).keys())
+                if string_dict['report']['id'] == string_dict['total_item']:
+                    await self.saveReport(user_id=string_dict['user_id'],
+                                          task_id=string_dict['task_id'])
+                else:
+                    print("item count ", string_dict['report']['id'], string_dict['total_item'])
+        elif 'report-get' in string_dict:
+            await self.sendReport(string_dict)
+        elif 'file-get' in string_dict:
+            await self.sendFile(string_dict)
         else:
             await self.fetchPage(data_dict=string_dict)
+
+    @database_sync_to_async
+    def saveReport(self, task_id, user_id):
+        # print('saveReport', type(self.text[0]), type(self.image[0]), type(self.audio[0]))
+        activity = Activity.objects.filter(
+            activity_id=Task.objects.filter(task_id=task_id).first().task_activity_id.activity_id).first()
+        report = Report(
+            report_activity=activity,
+            report_data={
+                "image": self.image,
+                "audio": self.audio,
+                "text": self.text
+            },
+            report_user_id=Users.objects.filter(user_id=user_id).first()
+        )
+        report.save()
+        activity.activity_status_id = Status.objects.filter(status_id=4).first()
+        activity.save()
+
+    def handleImage(self, data, name):
+        media_directory = 'files'
+        file_name = str(name) + ".jpg"
+        file_path = os.path.join(settings.MEDIA_ROOT, media_directory, file_name)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, 'ab') as file:
+            file.write(data)
+            file.flush()
+        return file_path
 
     async def chat_message(self, event):
         await self.send(text_data=event['message'])
@@ -102,6 +194,10 @@ class MyConsumer(AsyncWebsocketConsumer):
     async def getActivity(self, event):
         queries = await self.existing()
         await self.sendActivity(queries=queries)
+
+    @database_sync_to_async
+    def getUser(self, id):
+        return Users.objects.filter(user_id=id).get()
 
     @database_sync_to_async
     def checkAuth(self, event):
@@ -376,4 +472,47 @@ class MyConsumer(AsyncWebsocketConsumer):
             }
             print(body)
             asyncio.run(self.send(text_data=json.dumps(body)))
+        pass
+
+    def handleAudio(self, data, name):
+        media_directory = 'files'
+        file_name = str(name) + "audio.mp3"
+        file_path = os.path.join(settings.MEDIA_ROOT, media_directory, file_name)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, 'ab') as file:
+            file.write(data)
+            file.flush()
+        return file_path
+
+    @database_sync_to_async
+    def sendReport(self, string_dict):
+        print("called sendReport...")
+        user = Users.objects.filter(user_id=self.userid).first()
+        activity = Activity.objects.filter(activity_id=string_dict['report-get'], activity_creator=user).first()
+        print(activity)
+        reports = Report.objects.filter(
+            report_activity=activity,
+        )
+        print(reports)
+        for report in reports:
+            user = Users.objects.filter(user_id=report.report_user_id.user_id).first()
+            asyncio.run(self.send(text_data=json.dumps({
+                'report_from': user.user_name,
+                'report_user_id': user.user_id,
+                'reports': report.report_data
+            })))
+        pass
+
+    async def sendFile(self, string_dict):
+        print(string_dict, "sending file...")
+        if os.path.exists(string_dict['file-get']):
+            file_size = os.path.getsize(string_dict['file-get'])
+            await self.send(text_data=json.dumps({"file-size": file_size}))
+            with open(string_dict['file-get'], 'rb') as file:  # Open the file in binary mode
+                chunk_size = 1024
+                while True:
+                    chunk = file.read(chunk_size)
+                    if not chunk:
+                        break
+                    await self.send(bytes_data=chunk)  # Use bytes_data instead of text_data
         pass
