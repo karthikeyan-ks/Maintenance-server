@@ -487,8 +487,7 @@ class MyConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def sendReport(self, string_dict):
         print("called sendReport...")
-        user = Users.objects.filter(user_id=self.userid).first()
-        activity = Activity.objects.filter(activity_id=string_dict['report-get'], activity_creator=user).first()
+        activity = Activity.objects.filter(activity_id=string_dict['report-get']).first()
         print(activity)
         reports = Report.objects.filter(
             report_activity=activity,
