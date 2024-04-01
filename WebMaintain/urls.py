@@ -20,6 +20,7 @@ from django.urls import include, path, re_path
 from liveData import views
 
 urlpatterns = [
+    path('media/', views.serve_media_file, name='serve_media_file'),
     path('admin/', admin.site.urls),
     path('', include('liveData.urls')),
     path('admin/login/', views.admin_login, name='admin_login'),
