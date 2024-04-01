@@ -46,6 +46,7 @@ class Users(models.Model):
         choices=YourChoices.choices,
         default=YourChoices.CHOICE_TWO
     )
+    logged = models.BooleanField(default=False)
 
 
 class Activity(models.Model):
@@ -81,7 +82,5 @@ class Task(models.Model):
 class Report(models.Model):
     report_id = models.AutoField(primary_key=True)
     report_activity = models.ForeignKey(Activity, on_delete=models.CASCADE)
-    report_text = models.TextField()
-    report_image = models.ImageField(upload_to='images/', null=True, blank=True)
-    report_audio = models.FileField(upload_to='audios', null=True, blank=True)
+    report_data = models.JSONField(null=True, blank=True)
     report_user_id = models.ForeignKey(Users, on_delete=models.CASCADE, default=1)

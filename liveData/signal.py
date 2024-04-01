@@ -7,7 +7,7 @@ from django.db.models.signals import post_save
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 
-from .models import Activity, Task, Status, Users
+from .models import Activity, Task, Status, Users, Report
 
 
 @receiver(post_save, sender=Activity)
@@ -18,7 +18,7 @@ def on_database_change(sender, instance, created, **kwargs):
     task_assigned_to_user_name = "None"
     if not created:
         if instance.activity_status_id == Status.objects.filter(status_id=1).first():
-            print("task already exist so deleting it"+instance.activity_name)
+            print("task already exist so deleting it" + instance.activity_name)
             task.delete()
             channels_layer = channels.layers.get_channel_layer()
             print("sending ...")
@@ -44,7 +44,7 @@ def on_database_change(sender, instance, created, **kwargs):
                 }
             )
         elif instance.activity_status_id == Status.objects.filter(status_id=2).first():
-            print("task already not exist cant delete"+instance.activity_name)
+            print("task already not exist cant delete" + instance.activity_name)
 
 
 @receiver(post_save, sender=Task)
@@ -71,11 +71,21 @@ def task_save_change(sender, instance, created, **kwargs):
     else:
         print("updated")
     async_to_sync(channels_layer.group_send)(
-        "chat_users", {
+        "admin", {
             "type": 'send_database_client',
             "message": body
         }
     )
+
+
+@receiver(post_save, sender=Report)
+def reportTrigger(sender, instance, **kwargs):
+    print("report triggered")
+    activity_id = instance.report_activity
+    print(activity_id)
+    activity_id.activity_status_id = Status.objects.filter(status_id=1).first()
+    activity_id.save()
+
 
 
 @receiver(pre_delete, sender=Activity)
