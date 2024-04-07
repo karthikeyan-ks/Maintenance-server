@@ -47,18 +47,21 @@ class Users(models.Model):
         default=YourChoices.CHOICE_TWO
     )
     logged = models.BooleanField(default=False)
+    token = models.CharField(max_length=255, default="token")
 
 
 class Activity(models.Model):
     activity_id = models.AutoField(primary_key=True)
     activity_name = models.CharField(max_length=30)
     activity_issued_date = models.DateField(default=timezone.now)
+    activity_last_reported = models.DateField(default=timezone.now())
     activity_description = models.TextField()
     activity_machine_id = models.ForeignKey(Machine, on_delete=models.CASCADE)
     activity_component_id = models.ForeignKey(Component, on_delete=models.CASCADE)
     activity_schedule_id = models.ForeignKey(Schedule, on_delete=models.CASCADE)
     activity_status_id = models.ForeignKey(Status, on_delete=models.CASCADE, default=1)
     activity_creator = models.ForeignKey(Users, on_delete=models.CASCADE, default=1)
+    activity_schedule_value = models.IntegerField(default=7)
 
 
 class ChangeType(models.Model):
