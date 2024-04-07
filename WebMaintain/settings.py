@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -84,15 +85,26 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'Management',
-        'USER': 'junaid',
-        'PASSWORD': 'Password@123!',
+        'USER': 'root',
+        'PASSWORD': 'password',
         'HOST': 'localhost',
         'PORT': '3306'
     }
 }
+CELERY_BEAT_SCHEDULE = {
+    'run-every-day': {
+        'task': 'liveData.task.update',
+        'schedule': 10  # timedelta(days=1),  # Run every day
+    },
+}
 
+CELERY_BROKER_URL = 'redis://localhost:6379/0'  # Replace with your Redis URL
+CELERY_RESULT_BACKEND = 'redis://localhost:6379'  # Replace with your Redis URL
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
+# settings.py
+
+CELERY_IMPORTS = ('liveData.task',)
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -126,7 +138,6 @@ USE_TZ = True
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')  # Define the media root directory
 MEDIA_URL = '/media/'  # Define the URL prefix for media files
-
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static/')

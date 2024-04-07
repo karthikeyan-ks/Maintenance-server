@@ -2,13 +2,13 @@ import asyncio
 import base64
 import json
 import os
+import traceback
+from datetime import datetime
 
-import channels.layers
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
-from datetime import datetime
-import traceback
 from django.conf import settings
+
 from .models import Activity, Users, Component, Machine, Schedule, Task, Status, Report
 
 
@@ -22,6 +22,7 @@ class MyConsumer(AsyncWebsocketConsumer):
         self.audio = []
         self.text = []
         self.userid = int()
+        self.user = None
 
     async def connect(self):
         print("channel name", self.channel_name)
@@ -30,6 +31,7 @@ class MyConsumer(AsyncWebsocketConsumer):
         self.group_name = f"chat_{room_name}"
         if room_name != "userid":
             user = await self.getUser(int(room_name))
+            self.user = user
             self.userid = int(room_name)
             print(user)
             if user.user_mode == 'A':
@@ -65,14 +67,18 @@ class MyConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         # print("receive function", text_data)
         string_dict = json.loads(text_data)
-
         if 'type' in string_dict:
-            # Serialize the data to a JSON-formatted string
             json_string = json.dumps(text_data)
             await self.channel_layer.group_send(self.group_name, {
                 'type': 'chat.message',
                 'message': json_string
             })
+        elif 'token' in string_dict:
+            if self.user is not None:
+                print("user is not None")
+                await self.saveUser(string_dict['token'])
+            else:
+                print("user id None")
         elif 'auth' in string_dict:
             await self.auth(event=string_dict)
         elif 'activity' in string_dict and 'create' not in string_dict and 'update' not in string_dict and 'delete' not in string_dict:
@@ -127,11 +133,21 @@ class MyConsumer(AsyncWebsocketConsumer):
                 else:
                     print("item count ", string_dict['report']['id'], string_dict['total_item'])
         elif 'report-get' in string_dict:
-            await self.sendReport(string_dict)
+            full = False
+            if string_dict['report-get'] == -1:
+                full = True
+            await self.sendReport(string_dict, full)
         elif 'file-get' in string_dict:
+            print(string_dict['file-get'])
             await self.sendFile(string_dict)
         else:
             await self.fetchPage(data_dict=string_dict)
+
+    @database_sync_to_async
+    def saveUser(self, token):
+        self.user.token = token
+        print("token is...", self.user.token)
+        self.user.save()
 
     @database_sync_to_async
     def saveReport(self, task_id, user_id):
@@ -203,7 +219,12 @@ class MyConsumer(AsyncWebsocketConsumer):
     def checkAuth(self, event):
         username = event['username']
         password = event['password']
-        result = 0
+        result = {
+            'user_id': 'None',
+            'username': 'None',
+            'password': 'None',
+            'usermode': 'None'
+        }
         try:
             user = Users.objects.get(user_name=username, user_password=password)
             mode = user.user_mode
@@ -237,7 +258,9 @@ class MyConsumer(AsyncWebsocketConsumer):
                     "activity_schedule_id": query.activity_schedule_id.schedule_id,
                     "activity_name": query.activity_name,
                     "activity_issued_date": query.activity_issued_date.strftime("%Y-%m-%d"),
+                    "activity_last_reported": query.activity_last_reported.strftime("%Y-%m-%d"),
                     "assigned_to": task.task_assign_to.user_id,
+                    "schedule_value": query.activity_schedule_value,
                     "assigned_to_user": task.task_assign_to.user_name if task is not None else "None",
                     "activity_creator": Users.objects.filter(user_id=query.activity_creator.user_id).first().user_name,
                     "change": "create",
@@ -254,7 +277,9 @@ class MyConsumer(AsyncWebsocketConsumer):
                     "activity_schedule_id": query.activity_schedule_id.schedule_id,
                     "activity_name": query.activity_name,
                     "activity_issued_date": query.activity_issued_date.strftime("%Y-%m-%d"),
+                    "activity_last_reported": query.activity_last_reported.strftime("%Y-%m-%d"),
                     "assigned_to": 0,
+                    "schedule_value": query.activity_schedule_value,
                     "activity_creator": Users.objects.filter(user_id=query.activity_creator.user_id).first().user_name,
                     "assigned_to_user": "None",
                     "change": "create",
@@ -319,11 +344,12 @@ class MyConsumer(AsyncWebsocketConsumer):
                 component_id=data['activity']['activity_component_id']
             ).first(),
             activity_schedule_id=Schedule.objects.all().filter(
-                schedule_id=data['activity']['activity_component_id']
+                schedule_id=data['activity']['activity_schedule_id']
             ).first(),
             activity_creator=Users.objects.all().filter(user_name=data['username'],
                                                         user_password=data['password']
-                                                        ).first()
+                                                        ).first(),
+            activity_schedule_value=data['activity']['schedule_value']
         )
         instance.save()
         body = {
@@ -335,6 +361,8 @@ class MyConsumer(AsyncWebsocketConsumer):
             "activity_schedule_id": instance.activity_schedule_id.schedule_id,
             "activity_name": instance.activity_name,
             "activity_issued_date": instance.activity_issued_date.strftime("%Y-%m-%d"),
+            "activity_last_reported": instance.activity_last_reported.strftime("%Y-%m-%d"),
+            "schedule_value": instance.activity_schedule_value,
             "activity_creator": instance.activity_creator.user_name,
             "assigned_to": 0,
             "assigned_to_user": "None",
@@ -353,14 +381,16 @@ class MyConsumer(AsyncWebsocketConsumer):
         print(query['users'])
         users = Users.objects.filter(user_name__startswith=query['users'], user_mode='B').order_by('user_name')
         print(len(users))
+        usersBody = []
         for user in users:
             body = {
                 'username': user.user_name,
                 'userid': user.user_id,
                 'key': query['users']
             }
+            usersBody.append(body)
             print(body)
-            asyncio.run(self.send(text_data=json.dumps(body)))
+        asyncio.run(self.send(text_data=json.dumps(usersBody)))
         pass
 
     @database_sync_to_async
@@ -404,8 +434,6 @@ class MyConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(body))
         pass
 
-    import traceback
-
     @database_sync_to_async
     def updateActivity(self, query):
         print("update activity called")
@@ -424,6 +452,7 @@ class MyConsumer(AsyncWebsocketConsumer):
             task = Task.objects.filter(
                 task_activity_id=query['activity']['activity_id']
             ).first()
+            print(query)
             if query['activity']['assigned_to_user'] == "None":
                 if activity is not None:
                     if task is not None:
@@ -432,6 +461,7 @@ class MyConsumer(AsyncWebsocketConsumer):
                         activity.save()
                     else:
                         print("task not assigned for this activity")
+                        activity.save()
                 else:
                     print("creating Activity because no activity found")
                     self.createActivity(data=query)
@@ -485,22 +515,43 @@ class MyConsumer(AsyncWebsocketConsumer):
         return file_path
 
     @database_sync_to_async
-    def sendReport(self, string_dict):
-        print("called sendReport...")
-        activity = Activity.objects.filter(activity_id=string_dict['report-get']).first()
-        print(activity)
-        reports = Report.objects.filter(
-            report_activity=activity,
-        )
-        print(reports)
-        for report in reports:
-            user = Users.objects.filter(user_id=report.report_user_id.user_id).first()
-            asyncio.run(self.send(text_data=json.dumps({
-                'report_from': user.user_name,
-                'report_user_id': user.user_id,
-                'reports': report.report_data
-            })))
-        pass
+    def sendReport(self, string_dict, full):
+        if full:
+            activities = Activity.objects.all()
+            for activity in activities:
+                reports = Report.objects.filter(
+                    report_activity=activity,
+                ).all()
+                if reports is not None:
+                    for report in reports:
+                        print(report.report_data)
+                        user = Users.objects.filter(user_id=report.report_user_id.user_id).first()
+                        asyncio.run(self.send(text_data=json.dumps({
+                            'activity-id': activity.activity_id,
+                            'activity-name': activity.activity_name,
+                            'activity-description': activity.activity_description,
+                            'report_from': user.user_name,
+                            'report_user_id': user.user_id,
+                            'reports-all': report.report_data
+                        })))
+                else:
+                    print("No Report for this activity...")
+        else:
+            print("called sendReport...")
+            activity = Activity.objects.filter(activity_id=string_dict['report-get']).first()
+            print(activity)
+            reports = Report.objects.filter(
+                report_activity=activity,
+            )
+            print(reports)
+            for report in reports:
+                user = Users.objects.filter(user_id=report.report_user_id.user_id).first()
+                asyncio.run(self.send(text_data=json.dumps({
+                    'report_from': user.user_name,
+                    'report_user_id': user.user_id,
+                    'reports': report.report_data
+                })))
+            pass
 
     async def sendFile(self, string_dict):
         print(string_dict, "sending file...")
