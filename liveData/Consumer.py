@@ -39,11 +39,13 @@ class MyConsumer(AsyncWebsocketConsumer):
                     "admin",
                     self.channel_name
                 )
+                print("admin group created...")
             elif user.user_mode == 'B':
                 await self.channel_layer.group_add(
                     "inspectors",
                     self.channel_name
                 )
+                print("inspector group created...")
         await self.channel_layer.group_add(
             "broadcast",
             self.channel_name
@@ -182,6 +184,7 @@ class MyConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def deleteActivity(self, query):
+        query = json.loads(query)
         print("activity is going to delete")
         activity = Activity.objects.filter(activity_id=query['activity']['activity_id']).first()
         if activity is not None:
@@ -437,9 +440,10 @@ class MyConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def updateActivity(self, query):
         print("update activity called")
+        print(type(query),query['activity']['activity_id'])
         try:
             activity = Activity.objects.filter(
-                activity_id=query['activity']['activity_id']
+                activity_id=int(query['activity']['activity_id'])
             ).first()
             activity.activity_name = query['activity']['activity_name']
             activity.activity_description = query['activity']['activity_description']
@@ -452,7 +456,7 @@ class MyConsumer(AsyncWebsocketConsumer):
             task = Task.objects.filter(
                 task_activity_id=query['activity']['activity_id']
             ).first()
-            print(query)
+
             if query['activity']['assigned_to_user'] == "None":
                 if activity is not None:
                     if task is not None:
