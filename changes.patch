@@ -1,0 +1,70 @@
+diff --git a/liveData/Consumer.py b/liveData/Consumer.py
+index c9ca7f60..ce0752bf 100644
+--- a/liveData/Consumer.py
++++ b/liveData/Consumer.py
+@@ -39,11 +39,13 @@ class MyConsumer(AsyncWebsocketConsumer):
+                     "admin",
+                     self.channel_name
+                 )
++                print("admin group created...")
+             elif user.user_mode == 'B':
+                 await self.channel_layer.group_add(
+                     "inspectors",
+                     self.channel_name
+                 )
++                print("inspector group created...")
+         await self.channel_layer.group_add(
+             "broadcast",
+             self.channel_name
+@@ -182,6 +184,7 @@ class MyConsumer(AsyncWebsocketConsumer):
+ 
+     @database_sync_to_async
+     def deleteActivity(self, query):
++        query = json.loads(query)
+         print("activity is going to delete")
+         activity = Activity.objects.filter(activity_id=query['activity']['activity_id']).first()
+         if activity is not None:
+@@ -437,9 +440,10 @@ class MyConsumer(AsyncWebsocketConsumer):
+     @database_sync_to_async
+     def updateActivity(self, query):
+         print("update activity called")
++        print(type(query),query['activity']['activity_id'])
+         try:
+             activity = Activity.objects.filter(
+-                activity_id=query['activity']['activity_id']
++                activity_id=int(query['activity']['activity_id'])
+             ).first()
+             activity.activity_name = query['activity']['activity_name']
+             activity.activity_description = query['activity']['activity_description']
+@@ -452,7 +456,7 @@ class MyConsumer(AsyncWebsocketConsumer):
+             task = Task.objects.filter(
+                 task_activity_id=query['activity']['activity_id']
+             ).first()
+-            print(query)
++
+             if query['activity']['assigned_to_user'] == "None":
+                 if activity is not None:
+                     if task is not None:
+diff --git a/liveData/urls.py b/liveData/urls.py
+index 54f19479..c2ff2ca4 100644
+--- a/liveData/urls.py
++++ b/liveData/urls.py
+@@ -1,5 +1,12 @@
+ from django.urls import include, path, re_path
+-from . import views 
+-urlpatterns = [ 
+-    path('', views.index, name="index"), 
+-]
+\ No newline at end of file
++from . import views
++
++from django.conf import settings
++from django.conf.urls.static import static
++
++urlpatterns = [
++    path('', views.index, name="index"),
++]
++
++if settings.DEBUG:
++    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+\ No newline at end of file
